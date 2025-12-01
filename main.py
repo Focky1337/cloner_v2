@@ -5214,7 +5214,7 @@ async def show_help(callback: CallbackQuery):
             "- Отправку сообщений из текстовых файлов\n"
             "- Работу через прокси\n"
             "- Автоматическую проверку работоспособности аккаунтов\n\n"
-            "Техподдержка: @imfocky2000",
+            "Техподдержка: @calfetkin",
             reply_markup=main_menu_kb()
         )
         await callback.answer()
