@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Статистика - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="stats-page">
+    <div class="page-header">
+        <h1><i class="fas fa-chart-bar"></i> Детальная статистика</h1>
+        <button class="btn btn-primary" onclick="refreshStats()">
+            <i class="fas fa-sync-alt"></i> Обновить
+        </button>
+    </div>
+
+    <div class="stats-grid-detailed">
+        <div class="stat-card-large">
+            <div class="stat-icon-large blue">
+                <i class="fas fa-paper-plane"></i>
+            </div>
+            <div class="stat-content-large">
+                <div class="stat-value-large" id="totalMessages">0</div>
+                <div class="stat-label-large">Всего сообщений отправлено</div>
+            </div>
+        </div>
+
+        <div class="stat-card-large">
+            <div class="stat-icon-large green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content-large">
+                <div class="stat-value-large" id="successRate">0%</div>
+                <div class="stat-label-large">Успешность отправки</div>
+            </div>
+        </div>
+
+        <div class="stat-card-large">
+            <div class="stat-icon-large orange">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-content-large">
+                <div class="stat-value-large" id="avgDelay">0</div>
+                <div class="stat-label-large">Средняя задержка (сек)</div>
+            </div>
+        </div>
+
+        <div class="stat-card-large">
+            <div class="stat-icon-large purple">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-content-large">
+                <div class="stat-value-large" id="errorCount">0</div>
+                <div class="stat-label-large">Ошибок за сегодня</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <h2><i class="fas fa-chart-line"></i> Активность по часам (сегодня)</h2>
+        <div class="chart-container">
+            <canvas id="activityChart"></canvas>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <h2><i class="fas fa-chart-pie"></i> Распределение по типам событий</h2>
+        <div class="chart-container">
+            <canvas id="eventsChart"></canvas>
+        </div>
+    </div>
+
+    <div class="stats-section">
+        <h2><i class="fas fa-list"></i> Топ аккаунтов</h2>
+        <div class="top-accounts" id="topAccounts">
+            <div class="loading">Загрузка...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    let activityChart = null;
+    let eventsChart = null;
+
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/stats/detailed');
+            const stats = await response.json();
+            
+            if (stats.error) {
+                console.error('Ошибка загрузки статистики:', stats.error);
+                showNotification('❌ ' + stats.error, 'error');
+                return;
+            }
+            
+            document.getElementById('totalMessages').textContent = stats.total_messages || 0;
+            document.getElementById('successRate').textContent = (stats.success_rate || 0) + '%';
+            document.getElementById('avgDelay').textContent = (stats.avg_delay || 0).toFixed(1);
+            document.getElementById('errorCount').textContent = stats.error_count || 0;
+            
+            // Загрузка топ аккаунтов
+            if (stats.top_accounts && stats.top_accounts.length > 0) {
+                const topAccountsDiv = document.getElementById('topAccounts');
+                topAccountsDiv.innerHTML = stats.top_accounts.map((acc, index) => `
+                    <div class="top-account-item">
+                        <div class="top-account-rank">#${index + 1}</div>
+                        <div class="top-account-info">
+                            <strong>${acc.phone}</strong>
+                            <span>${acc.messages_count} сообщений</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('topAccounts').innerHTML = '<div class="empty">Нет данных об аккаунтах</div>';
+            }
+            
+            // Обновление графиков
+            if (stats.hourly_activity) {
+                updateActivityChart(stats.hourly_activity);
+            }
+            
+            // График событий
+            updateEventsChart(stats);
+        } catch (error) {
+            console.error('Ошибка загрузки статистики:', error);
+            showNotification('❌ Ошибка загрузки статистики: ' + error.message, 'error');
+        }
+    }
+
+    function updateActivityChart(data) {
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        
+        if (activityChart) {
+            activityChart.destroy();
+        }
+        
+        activityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => {
+                    const hour = d.hour < 10 ? '0' + d.hour : d.hour;
+                    return hour + ':00';
+                }),
+                datasets: [{
+                    label: 'Активность (событий)',
+                    data: data.map(d => d.count),
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#8b5cf6',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#8b5cf6',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(20, 20, 20, 0.95)',
+                        titleColor: '#8b5cf6',
+                        bodyColor: '#e0e0e0',
+                        borderColor: '#8b5cf6',
+                        borderWidth: 1,
+                        padding: 12
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { 
+                            color: '#a0a0a0',
+                            font: { size: 11 }
+                        },
+                        grid: { 
+                            color: 'rgba(139, 92, 246, 0.1)',
+                            lineWidth: 1
+                        }
+                    },
+                    y: {
+                        ticks: { 
+                            color: '#a0a0a0',
+                            font: { size: 11 }
+                        },
+                        grid: { 
+                            color: 'rgba(139, 92, 246, 0.1)',
+                            lineWidth: 1
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    }
+
+    function updateEventsChart(stats) {
+        const ctx = document.getElementById('eventsChart').getContext('2d');
+        
+        if (eventsChart) {
+            eventsChart.destroy();
+        }
+        
+        const successCount = stats.total_messages - stats.error_count;
+        const errorCount = stats.error_count;
+        const otherCount = Math.max(0, stats.total_messages - successCount - errorCount);
+        
+        eventsChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Успешные', 'Ошибки', 'Другие'],
+                datasets: [{
+                    data: [successCount, errorCount, otherCount],
+                    backgroundColor: [
+                        'rgba(0, 255, 136, 0.8)',
+                        'rgba(255, 0, 68, 0.8)',
+                        'rgba(139, 92, 246, 0.8)'
+                    ],
+                    borderColor: [
+                        '#00ff88',
+                        '#ff0044',
+                        '#8b5cf6'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#8b5cf6',
+                            font: {
+                                size: 12,
+                                weight: 'bold'
+                            },
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(20, 20, 20, 0.95)',
+                        titleColor: '#8b5cf6',
+                        bodyColor: '#e0e0e0',
+                        borderColor: '#8b5cf6',
+                        borderWidth: 1,
+                        padding: 12
+                    }
+                }
+            }
+        });
+    }
+
+    function refreshStats() {
+        loadStats();
+    }
+
+    loadStats();
+</script>
+{% endblock %}

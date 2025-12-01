@@ -1,0 +1,752 @@
+{% extends "base.html" %}
+
+{% block title %}Аккаунты - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="accounts-page">
+    <div class="page-header">
+        <h1><i class="fas fa-users"></i> Управление аккаунтами</h1>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="showAddAccountModal()">
+                <i class="fas fa-plus"></i> Добавить аккаунт
+            </button>
+            <button class="btn btn-primary" onclick="refreshAccounts()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+            <button class="btn btn-secondary" onclick="showBulkActions()">
+                <i class="fas fa-tasks"></i> Массовые операции
+            </button>
+        </div>
+    </div>
+
+    <div class="accounts-filters">
+        <input type="text" id="searchInput" class="cyber-input" placeholder="Поиск по телефону..." onkeyup="filterAccounts()">
+        <select id="statusFilter" class="cyber-input" onchange="filterAccounts()">
+            <option value="all">Все статусы</option>
+            <option value="active">Активные</option>
+            <option value="inactive">Неактивные</option>
+        </select>
+    </div>
+
+    <div class="accounts-table-container">
+        <table class="accounts-table" id="accountsTable">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                    <th>Телефон</th>
+                    <th>Источник</th>
+                    <th>Назначения</th>
+                    <th>Статус</th>
+                    <th>Прокси</th>
+                    <th>Пол</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="accountsTableBody">
+                <tr>
+                    <td colspan="8" class="loading">Загрузка...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-edit"></i> Редактирование аккаунта</h2>
+            <span class="close" onclick="closeModal('editModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Телефон</label>
+                <input type="text" id="editPhone" class="cyber-input" readonly>
+            </div>
+            <div class="form-group">
+                <label>Источник</label>
+                <input type="text" id="editSource" class="cyber-input" placeholder="@source_chat">
+            </div>
+            <div class="form-group">
+                <label>Назначения (через запятую)</label>
+                <input type="text" id="editDest" class="cyber-input" placeholder="@chat1, @chat2">
+            </div>
+            <div class="form-group">
+                <label>Статус</label>
+                <label class="cyber-switch">
+                    <input type="checkbox" id="editStatus">
+                    <span class="slider"></span>
+                </label>
+                <span id="statusText">Неактивен</span>
+            </div>
+            <div class="form-group">
+                <label>Пол</label>
+                <select id="editGender" class="cyber-input">
+                    <option value="male">Мужской</option>
+                    <option value="female">Женский</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="saveAccount()">
+                <i class="fas fa-save"></i> Сохранить
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal('editModal')">
+                Отмена
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления аккаунта -->
+<div id="addAccountModal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h2><i class="fas fa-plus"></i> Добавить аккаунт</h2>
+            <span class="close" onclick="closeAddAccountModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <!-- Шаг 1: Выбор способа -->
+            <div id="addAccountStep1" class="add-account-step">
+                <div class="form-group">
+                    <label>Способ добавления</label>
+                    <div class="add-method-buttons">
+                        <button class="btn btn-primary btn-block" onclick="showPhoneAuth()">
+                            <i class="fas fa-phone"></i> По номеру телефона
+                        </button>
+                        <button class="btn btn-secondary btn-block" onclick="showSessionUpload()">
+                            <i class="fas fa-file-upload"></i> Загрузить .session файл
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Шаг 2: Авторизация по телефону -->
+            <div id="addAccountStep2" class="add-account-step" style="display: none;">
+                <div class="form-group">
+                    <label>Номер телефона</label>
+                    <input type="text" id="addPhone" class="cyber-input" placeholder="+1234567890" onkeypress="if(event.key==='Enter') sendAuthCode()">
+                </div>
+                <div class="form-group" id="codeGroup" style="display: none;">
+                    <label>Код подтверждения</label>
+                    <input type="text" id="addCode" class="cyber-input" placeholder="12345" maxlength="5" onkeypress="if(event.key==='Enter') verifyAuthCode()">
+                </div>
+                <div class="form-group" id="password2FAGroup" style="display: none;">
+                    <label>Пароль 2FA</label>
+                    <input type="password" id="addPassword2FA" class="cyber-input" placeholder="Пароль двухфакторной аутентификации" onkeypress="if(event.key==='Enter') verify2FA()">
+                </div>
+                <div class="form-group" id="accountSettingsGroup" style="display: none;">
+                    <label>Источник (чат/канал)</label>
+                    <input type="text" id="addSource" class="cyber-input" placeholder="@source_chat или ID">
+                </div>
+                <div class="form-group" id="accountDestGroup" style="display: none;">
+                    <label>Назначения (через запятую)</label>
+                    <input type="text" id="addDest" class="cyber-input" placeholder="@chat1, @chat2">
+                </div>
+                <div class="form-group" id="accountGenderGroup" style="display: none;">
+                    <label>Пол</label>
+                    <select id="addGender" class="cyber-input">
+                        <option value="male">Мужской</option>
+                        <option value="female">Женский</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Шаг 3: Загрузка .session файла -->
+            <div id="addAccountStep3" class="add-account-step" style="display: none;">
+                <div class="form-group">
+                    <label>Выберите .session файл</label>
+                    <div class="file-upload-area" id="sessionUploadArea" style="min-height: 150px;">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Перетащите .session файл сюда или</p>
+                        <label for="sessionFileInput" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-folder-open"></i> Выбрать файл
+                        </label>
+                        <input type="file" id="sessionFileInput" style="display: none;" accept=".session" onchange="handleSessionFileSelect(event)">
+                        <p class="file-name" id="selectedSessionFileName"></p>
+                    </div>
+                </div>
+                <div class="form-group" id="sessionSettingsGroup" style="display: none;">
+                    <label>Источник (чат/канал)</label>
+                    <input type="text" id="sessionSource" class="cyber-input" placeholder="@source_chat или ID">
+                </div>
+                <div class="form-group" id="sessionDestGroup" style="display: none;">
+                    <label>Назначения (через запятую)</label>
+                    <input type="text" id="sessionDest" class="cyber-input" placeholder="@chat1, @chat2">
+                </div>
+                <div class="form-group" id="sessionGenderGroup" style="display: none;">
+                    <label>Пол</label>
+                    <select id="sessionGender" class="cyber-input">
+                        <option value="male">Мужской</option>
+                        <option value="female">Женский</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="sendCodeBtn" onclick="sendAuthCode()" style="display: none;">
+                <i class="fas fa-paper-plane"></i> Отправить код
+            </button>
+            <button class="btn btn-primary" id="verifyCodeBtn" onclick="verifyAuthCode()" style="display: none;">
+                <i class="fas fa-check"></i> Подтвердить код
+            </button>
+            <button class="btn btn-primary" id="verify2FABtn" onclick="verify2FA()" style="display: none;">
+                <i class="fas fa-shield-alt"></i> Подтвердить 2FA
+            </button>
+            <button class="btn btn-primary" id="saveAccountBtn" onclick="saveNewAccount()" style="display: none;">
+                <i class="fas fa-save"></i> Сохранить настройки
+            </button>
+            <button class="btn btn-primary" id="uploadSessionBtn" onclick="uploadSessionFile()" style="display: none;">
+                <i class="fas fa-upload"></i> Загрузить .session
+            </button>
+            <button class="btn btn-secondary" onclick="closeAddAccountModal()">
+                Отмена
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allAccounts = [];
+    let currentEditPhone = null;
+
+    async function loadAccounts() {
+        const tbody = document.getElementById('accountsTableBody');
+        tbody.innerHTML = '<tr><td colspan="8" class="loading">Загрузка...</td></tr>';
+        
+        try {
+            const response = await fetch('/api/accounts');
+            
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                if (response.status === 401 || response.status === 403) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="error">Ошибка авторизации. Пожалуйста, перезайдите.</td></tr>`;
+                    return;
+                }
+                const text = await response.text();
+                tbody.innerHTML = `<tr><td colspan="8" class="error">Ошибка: Сервер вернул неверный формат ответа</td></tr>`;
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+            
+            const allAccounts = await response.json();
+            
+            if (allAccounts.error) {
+                tbody.innerHTML = `<tr><td colspan="8" class="error">${allAccounts.error}</td></tr>`;
+                return;
+            }
+            
+            displayAccounts(allAccounts);
+        } catch (error) {
+            tbody.innerHTML = `<tr><td colspan="8" class="error">Ошибка: ${error.message}</td></tr>`;
+            console.error('Ошибка загрузки аккаунтов:', error);
+        }
+    }
+
+    function displayAccounts(accounts) {
+        const tbody = document.getElementById('accountsTableBody');
+        
+        if (accounts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty">Нет аккаунтов</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = accounts.map(acc => `
+            <tr data-phone="${acc.phone}">
+                <td><input type="checkbox" class="account-checkbox" value="${acc.phone}"></td>
+                <td><strong>${acc.phone}</strong></td>
+                <td>${acc.source_chat}</td>
+                <td>${acc.dest_chats.length} чат(ов)</td>
+                <td>
+                    <span class="badge ${acc.copy_mode === 'Активен' ? 'badge-success' : 'badge-secondary'}">
+                        ${acc.copy_mode}
+                    </span>
+                </td>
+                <td>${acc.proxy_id}</td>
+                <td>${acc.gender === 'female' ? '👩' : '👨'}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="editAccount('${acc.phone}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteAccount('${acc.phone}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function filterAccounts() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const status = document.getElementById('statusFilter').value;
+        
+        let filtered = allAccounts.filter(acc => {
+            const matchSearch = acc.phone.toLowerCase().includes(search);
+            const matchStatus = status === 'all' || 
+                (status === 'active' && acc.copy_mode === 'Активен') ||
+                (status === 'inactive' && acc.copy_mode !== 'Активен');
+            return matchSearch && matchStatus;
+        });
+        
+        displayAccounts(filtered);
+    }
+
+    function toggleSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.account-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    }
+
+    function refreshAccounts() {
+        loadAccounts();
+    }
+
+    function editAccount(phone) {
+        const account = allAccounts.find(acc => acc.phone === phone);
+        if (!account) return;
+        
+        currentEditPhone = phone;
+        document.getElementById('editPhone').value = account.phone;
+        document.getElementById('editSource').value = account.source_chat !== 'Не указан' ? account.source_chat : '';
+        document.getElementById('editDest').value = account.dest_chats.join(', ');
+        document.getElementById('editStatus').checked = account.copy_mode === 'Активен';
+        document.getElementById('editGender').value = account.gender;
+        updateStatusText();
+        
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    document.getElementById('editStatus').addEventListener('change', updateStatusText);
+    function updateStatusText() {
+        const text = document.getElementById('statusText');
+        text.textContent = document.getElementById('editStatus').checked ? 'Активен' : 'Неактивен';
+        text.style.color = document.getElementById('editStatus').checked ? '#00ff88' : '#a0a0a0';
+    }
+
+    async function saveAccount() {
+        const data = {
+            phone: currentEditPhone,
+            source_chat: document.getElementById('editSource').value,
+            dest_chats: document.getElementById('editDest').value.split(',').map(s => s.trim()).filter(s => s),
+            copy_mode: document.getElementById('editStatus').checked ? 1 : 0,
+            gender: document.getElementById('editGender').value
+        };
+
+        try {
+            const response = await fetch('/api/accounts/update', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Аккаунт обновлен!', 'success');
+                closeModal('editModal');
+                loadAccounts();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async function deleteAccount(phone) {
+        if (!confirm(`Удалить аккаунт ${phone}?`)) return;
+        
+        try {
+            const response = await fetch(`/api/accounts/delete/${encodeURIComponent(phone)}`, {
+                method: 'DELETE'
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Аккаунт удален!', 'success');
+                loadAccounts();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    let currentAuthStep = 1;
+    let currentAuthPhone = null;
+    let currentAuthCodeHash = null;
+
+    function showAddAccountModal() {
+        currentAuthStep = 1;
+        currentAuthPhone = null;
+        currentAuthCodeHash = null;
+        
+        // Сброс всех полей
+        document.getElementById('addPhone').value = '';
+        document.getElementById('addCode').value = '';
+        document.getElementById('addPassword2FA').value = '';
+        document.getElementById('addSource').value = '';
+        document.getElementById('addDest').value = '';
+        document.getElementById('addGender').value = 'male';
+        document.getElementById('sessionFileInput').value = '';
+        document.getElementById('selectedSessionFileName').textContent = '';
+        document.getElementById('sessionSource').value = '';
+        document.getElementById('sessionDest').value = '';
+        document.getElementById('sessionGender').value = 'male';
+        
+        // Показать шаг 1
+        document.getElementById('addAccountStep1').style.display = 'block';
+        document.getElementById('addAccountStep2').style.display = 'none';
+        document.getElementById('addAccountStep3').style.display = 'none';
+        
+        // Скрыть все кнопки
+        document.getElementById('sendCodeBtn').style.display = 'none';
+        document.getElementById('verifyCodeBtn').style.display = 'none';
+        document.getElementById('verify2FABtn').style.display = 'none';
+        document.getElementById('saveAccountBtn').style.display = 'none';
+        document.getElementById('uploadSessionBtn').style.display = 'none';
+        
+        // Скрыть группы
+        document.getElementById('codeGroup').style.display = 'none';
+        document.getElementById('password2FAGroup').style.display = 'none';
+        document.getElementById('accountSettingsGroup').style.display = 'none';
+        document.getElementById('accountDestGroup').style.display = 'none';
+        document.getElementById('accountGenderGroup').style.display = 'none';
+        document.getElementById('sessionSettingsGroup').style.display = 'none';
+        document.getElementById('sessionDestGroup').style.display = 'none';
+        document.getElementById('sessionGenderGroup').style.display = 'none';
+        
+        document.getElementById('addAccountModal').style.display = 'block';
+    }
+
+    function showPhoneAuth() {
+        document.getElementById('addAccountStep1').style.display = 'none';
+        document.getElementById('addAccountStep2').style.display = 'block';
+        document.getElementById('sendCodeBtn').style.display = 'inline-flex';
+    }
+
+    function showSessionUpload() {
+        document.getElementById('addAccountStep1').style.display = 'none';
+        document.getElementById('addAccountStep3').style.display = 'block';
+        document.getElementById('uploadSessionBtn').style.display = 'inline-flex';
+    }
+
+    async function sendAuthCode() {
+        const phone = document.getElementById('addPhone').value.trim();
+        if (!phone) {
+            showNotification('❌ Введите номер телефона', 'error');
+            return;
+        }
+
+        try {
+            showNotification('⏳ Отправка кода...', 'info');
+            const response = await fetch('/api/accounts/send-code', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({phone})
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                currentAuthPhone = phone;
+                currentAuthCodeHash = result.code_hash;
+                document.getElementById('codeGroup').style.display = 'block';
+                document.getElementById('sendCodeBtn').style.display = 'none';
+                document.getElementById('verifyCodeBtn').style.display = 'inline-flex';
+                showNotification('✅ Код отправлен! Проверьте Telegram', 'success');
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+            console.error('Ошибка отправки кода:', error);
+        }
+    }
+
+    async function verifyAuthCode() {
+        const code = document.getElementById('addCode').value.trim();
+        if (!code) {
+            showNotification('❌ Введите код', 'error');
+            return;
+        }
+
+        try {
+            showNotification('⏳ Проверка кода...', 'info');
+            const response = await fetch('/api/accounts/verify-code', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    phone: currentAuthPhone,
+                    code: code,
+                    code_hash: currentAuthCodeHash
+                })
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                if (result.requires_2fa) {
+                    // Нужен 2FA пароль
+                    document.getElementById('password2FAGroup').style.display = 'block';
+                    document.getElementById('verifyCodeBtn').style.display = 'none';
+                    document.getElementById('verify2FABtn').style.display = 'inline-flex';
+                    showNotification('🔐 Введите пароль 2FA', 'info');
+                } else {
+                    // Успешная авторизация, показываем настройки
+                    showAccountSettings();
+                }
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неверный код'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+            console.error('Ошибка проверки кода:', error);
+        }
+    }
+
+    async function verify2FA() {
+        const password = document.getElementById('addPassword2FA').value.trim();
+        if (!password) {
+            showNotification('❌ Введите пароль 2FA', 'error');
+            return;
+        }
+
+        try {
+            showNotification('⏳ Проверка пароля 2FA...', 'info');
+            const response = await fetch('/api/accounts/verify-2fa', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    phone: currentAuthPhone,
+                    password: password,
+                    code_hash: currentAuthCodeHash
+                })
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showAccountSettings();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неверный пароль'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+            console.error('Ошибка проверки 2FA:', error);
+        }
+    }
+
+    function showAccountSettings() {
+        document.getElementById('accountSettingsGroup').style.display = 'block';
+        document.getElementById('accountDestGroup').style.display = 'block';
+        document.getElementById('accountGenderGroup').style.display = 'block';
+        document.getElementById('verifyCodeBtn').style.display = 'none';
+        document.getElementById('verify2FABtn').style.display = 'none';
+        document.getElementById('saveAccountBtn').style.display = 'inline-flex';
+        showNotification('✅ Авторизация успешна! Заполните настройки', 'success');
+    }
+
+    async function saveNewAccount() {
+        const data = {
+            phone: currentAuthPhone,
+            source_chat: document.getElementById('addSource').value.trim(),
+            dest_chats: document.getElementById('addDest').value.split(',').map(s => s.trim()).filter(s => s),
+            gender: document.getElementById('addGender').value
+        };
+
+        try {
+            const response = await fetch('/api/accounts/save-settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Аккаунт успешно добавлен!', 'success');
+                closeAddAccountModal();
+                loadAccounts();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    function handleSessionFileSelect(event) {
+        const file = event.target.files[0];
+        if (file && file.name.endsWith('.session')) {
+            document.getElementById('selectedSessionFileName').textContent = `Выбран: ${file.name}`;
+            document.getElementById('sessionSettingsGroup').style.display = 'block';
+            document.getElementById('sessionDestGroup').style.display = 'block';
+            document.getElementById('sessionGenderGroup').style.display = 'block';
+        } else {
+            showNotification('❌ Выберите .session файл', 'error');
+        }
+    }
+
+    async function uploadSessionFile() {
+        const fileInput = document.getElementById('sessionFileInput');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            showNotification('❌ Выберите .session файл', 'error');
+            return;
+        }
+
+        try {
+            showNotification('⏳ Загрузка .session файла...', 'info');
+            const formData = new FormData();
+            formData.append('session_file', file);
+            formData.append('source_chat', document.getElementById('sessionSource').value.trim());
+            formData.append('dest_chats', document.getElementById('sessionDest').value);
+            formData.append('gender', document.getElementById('sessionGender').value);
+
+            const response = await fetch('/api/accounts/upload-session', {
+                method: 'POST',
+                body: formData
+            });
+
+            // Проверяем, что ответ JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                if (response.status === 401 || response.status === 403) {
+                    showNotification('❌ Ошибка авторизации. Пожалуйста, перезайдите.', 'error');
+                } else {
+                    showNotification('❌ Ошибка: Сервер вернул неверный формат ответа', 'error');
+                }
+                console.error('Ожидался JSON, получен:', text.substring(0, 100));
+                return;
+            }
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ .session файл успешно загружен!', 'success');
+                closeAddAccountModal();
+                loadAccounts();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    function closeAddAccountModal() {
+        document.getElementById('addAccountModal').style.display = 'none';
+        currentAuthStep = 1;
+        currentAuthPhone = null;
+        currentAuthCodeHash = null;
+    }
+
+    function showBulkActions() {
+        const selected = Array.from(document.querySelectorAll('.account-checkbox:checked')).map(cb => cb.value);
+        if (selected.length === 0) {
+            showNotification('Выберите аккаунты для массовых операций', 'info');
+            return;
+        }
+        alert(`Массовые операции для ${selected.length} аккаунтов (будет реализовано)`);
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    // Обновленная функция для закрытия модального окна добавления
+    function closeAddAccountModal() {
+        closeModal('addAccountModal');
+    }
+
+    window.onclick = function(event) {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    }
+
+    loadAccounts();
+</script>
+{% endblock %}

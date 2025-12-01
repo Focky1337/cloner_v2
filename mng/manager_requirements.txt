@@ -1,0 +1,9 @@
+# Telegram Bot Library
+aiogram>=3.13.0
+
+# HTTP клиент для CryptoBot API
+aiohttp>=3.9.0
+
+# Database (встроен в Python)
+# sqlite3
+

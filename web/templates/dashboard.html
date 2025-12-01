@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Главная - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div class="page-header">
+        <div>
+            <h1><i class="fas fa-tachometer-alt"></i> Панель управления</h1>
+            <p>Обзор системы и статистика</p>
+            <div style="margin-top: 1rem; display: flex; align-items: center;">
+                <a href="{{ bot_url }}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center;">
+                    <i class="fab fa-telegram"></i> Открыть Telegram бот
+                </a>
+            </div>
+        </div>
+        <div class="bot-controls">
+            <div class="bot-status" id="copyingStatus">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Проверка...</span>
+            </div>
+            <button class="btn btn-primary" id="startBtn" onclick="startCopying()" style="display: none;">
+                <i class="fas fa-play"></i> Запустить копирование
+            </button>
+            <button class="btn btn-danger" id="stopBtn" onclick="stopCopying()" style="display: none;">
+                <i class="fas fa-stop"></i> Остановить копирование
+            </button>
+            <button class="btn btn-secondary" onclick="refreshCopyingStatus()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+        </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <div class="stat-icon blue">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value" id="totalAccounts">-</div>
+                <div class="stat-label">Всего аккаунтов</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value" id="activeAccounts">-</div>
+                <div class="stat-label">Активных</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon purple">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value" id="accountsWithProxy">-</div>
+                <div class="stat-label">С прокси</div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon orange">
+                <i class="fas fa-paper-plane"></i>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value" id="accountsWithSource">-</div>
+                <div class="stat-label">С источником</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-section">
+        <h2><i class="fas fa-bolt"></i> Быстрые действия</h2>
+        <div class="action-grid">
+            <a href="{{ url_for('accounts_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Управление аккаунтами</h3>
+                    <p>Просмотр и редактирование аккаунтов</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('settings_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Настройки</h3>
+                    <p>Конфигурация системы</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('files_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Файлы сообщений</h3>
+                    <p>Управление текстовыми файлами</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('proxies_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Прокси</h3>
+                    <p>Управление прокси-серверами</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('logs_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Логи</h3>
+                    <p>Просмотр логов системы</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('stats_page') }}" class="action-card">
+                <div class="action-icon">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <div class="action-content">
+                    <h3>Статистика</h3>
+                    <p>Детальная аналитика</p>
+                </div>
+                <div class="action-arrow">
+                    <i class="fas fa-chevron-right"></i>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Загрузка статистики
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            
+            document.getElementById('totalAccounts').textContent = data.total_accounts || 0;
+            document.getElementById('activeAccounts').textContent = data.active_accounts || 0;
+            document.getElementById('accountsWithProxy').textContent = data.accounts_with_proxy || 0;
+            document.getElementById('accountsWithSource').textContent = data.accounts_with_source || 0;
+        } catch (error) {
+            console.error('Ошибка загрузки статистики:', error);
+        }
+    }
+
+    // Проверка статуса копирования
+    async function checkCopyingStatus() {
+        try {
+            const response = await fetch('/api/copying/status');
+            const data = await response.json();
+            
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            if (data.running && data.active_accounts > 0) {
+                statusIndicator.className = 'status-indicator status-running';
+                const accountsText = data.active_accounts === 1 ? 'аккаунт' : 
+                                    data.active_accounts < 5 ? 'аккаунта' : 'аккаунтов';
+                statusText.innerHTML = `<span>Копирование активно</span><br><span style="font-size: 0.85rem; color: #a0a0a0;">${data.active_accounts} ${accountsText}</span>`;
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-flex';
+            } else {
+                statusIndicator.className = 'status-indicator status-stopped';
+                const totalText = data.total_accounts || 0;
+                statusText.innerHTML = `<span>Копирование остановлено</span><br><span style="font-size: 0.85rem; color: #a0a0a0;">${totalText} аккаунтов</span>`;
+                startBtn.style.display = 'inline-flex';
+                stopBtn.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Ошибка проверки статуса:', error);
+            document.getElementById('statusText').innerHTML = '<span>Ошибка проверки</span>';
+        }
+    }
+
+    // Запуск копирования
+    async function startCopying() {
+        try {
+            showNotification('⏳ Запуск копирования...', 'info');
+            const response = await fetch('/api/copying/start', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('✅ ' + (result.message || 'Копирование запущено!'), 'success');
+                // Немедленно обновляем статус
+                await checkCopyingStatus();
+                loadStats(); // Обновляем статистику
+            } else {
+                showNotification('❌ ' + (result.error || 'Неизвестная ошибка'), 'error');
+                // Обновляем статус даже при ошибке
+                await checkCopyingStatus();
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+            await checkCopyingStatus();
+        }
+    }
+
+    // Остановка копирования
+    async function stopCopying() {
+        if (!confirm('Остановить копирование для всех аккаунтов?')) return;
+        
+        try {
+            showNotification('⏳ Остановка копирования...', 'info');
+            const response = await fetch('/api/copying/stop', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('✅ ' + (result.message || 'Копирование остановлено!'), 'success');
+                // Немедленно обновляем статус
+                await checkCopyingStatus();
+                loadStats(); // Обновляем статистику
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+                // Обновляем статус даже при ошибке
+                await checkCopyingStatus();
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+            await checkCopyingStatus();
+        }
+    }
+
+    // Обновление статуса
+    function refreshCopyingStatus() {
+        checkCopyingStatus();
+        loadStats();
+    }
+
+    // Загружаем статистику при загрузке страницы
+    loadStats();
+    checkCopyingStatus();
+    
+    // Обновляем каждые 30 секунд
+    setInterval(loadStats, 30000);
+    setInterval(checkCopyingStatus, 10000);
+</script>
+{% endblock %}
+

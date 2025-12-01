@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Логи - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="logs-page">
+    <div class="page-header">
+        <h1><i class="fas fa-file-alt"></i> Логи системы</h1>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="refreshLogs()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+            <button class="btn btn-secondary" onclick="clearLogs()">
+                <i class="fas fa-trash"></i> Очистить
+            </button>
+        </div>
+    </div>
+
+    <div class="logs-filters">
+        <select id="logLevelFilter" class="cyber-input" onchange="filterLogs()">
+            <option value="all">Все уровни</option>
+            <option value="info">INFO</option>
+            <option value="success">SUCCESS</option>
+            <option value="warning">WARNING</option>
+            <option value="error">ERROR</option>
+        </select>
+        <input type="text" id="logSearch" class="cyber-input" placeholder="Поиск в логах..." onkeyup="filterLogs()">
+        <label class="cyber-switch">
+            <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh()">
+            <span class="slider"></span>
+        </label>
+        <span>Автообновление</span>
+    </div>
+
+    <div class="logs-container">
+        <div class="logs-content" id="logsContent">
+            <div class="loading">Загрузка логов...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let autoRefreshInterval = null;
+    let allLogs = [];
+
+    async function loadLogs() {
+        try {
+            const response = await fetch('/api/logs');
+            const logs = await response.json();
+            
+            if (logs.error) {
+                document.getElementById('logsContent').innerHTML = `<div class="error">${logs.error}</div>`;
+                return;
+            }
+            
+            allLogs = logs;
+            filterLogs();
+        } catch (error) {
+            document.getElementById('logsContent').innerHTML = `<div class="error">Ошибка: ${error.message}</div>`;
+        }
+    }
+
+    function filterLogs() {
+        const level = document.getElementById('logLevelFilter').value;
+        const search = document.getElementById('logSearch').value.toLowerCase();
+        const content = document.getElementById('logsContent');
+        
+        let filtered = allLogs.filter(log => {
+            const matchLevel = level === 'all' || log.level.toLowerCase() === level;
+            const matchSearch = !search || log.message.toLowerCase().includes(search);
+            return matchLevel && matchSearch;
+        });
+        
+        if (filtered.length === 0) {
+            content.innerHTML = '<div class="empty">Нет логов</div>';
+            return;
+        }
+        
+        content.innerHTML = filtered.map(log => `
+            <div class="log-entry ${log.level.toLowerCase()}">
+                <span class="log-time">${log.time}</span>
+                <span class="log-level">${log.level}</span>
+                <span class="log-message">${log.message}</span>
+            </div>
+        `).join('');
+        
+        // Прокрутка вниз
+        content.scrollTop = content.scrollHeight;
+    }
+
+    function refreshLogs() {
+        loadLogs();
+    }
+
+    function clearLogs() {
+        if (!confirm('Очистить все логи?')) return;
+        
+        fetch('/api/logs/clear', {method: 'POST'})
+            .then(r => r.json())
+            .then(result => {
+                if (result.success) {
+                    showNotification('✅ Логи очищены!', 'success');
+                    loadLogs();
+                } else {
+                    showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+                }
+            })
+            .catch(error => showNotification('❌ Ошибка: ' + error.message, 'error'));
+    }
+
+    function toggleAutoRefresh() {
+        const enabled = document.getElementById('autoRefresh').checked;
+        if (enabled) {
+            autoRefreshInterval = setInterval(loadLogs, 5000);
+        } else {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+        }
+    }
+
+    loadLogs();
+    toggleAutoRefresh();
+</script>
+{% endblock %}

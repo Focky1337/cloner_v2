@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Настройки - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="settings-page">
+    <div class="page-header">
+        <h1><i class="fas fa-cog"></i> Настройки</h1>
+    </div>
+
+    <div class="settings-section">
+        <h2><i class="fas fa-clock"></i> Задержки</h2>
+        <div class="settings-card">
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-paper-plane"></i>
+                    <div>
+                        <h3>Задержка между сообщениями</h3>
+                        <p>Время ожидания между отправкой сообщений (секунды)</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <input type="number" id="delayMessages" class="cyber-input" min="1" max="60" value="7">
+                    <span class="setting-unit">сек</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-users"></i>
+                    <div>
+                        <h3>Задержка между аккаунтами</h3>
+                        <p>Время ожидания при переключении аккаунтов (секунды)</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <input type="number" id="delayAccounts" class="cyber-input" min="1" max="120" value="12">
+                    <span class="setting-unit">сек</span>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <h3>Множитель FloodWait</h3>
+                        <p>Коэффициент увеличения времени ожидания при FloodWait</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <input type="number" id="floodMultiplier" class="cyber-input" min="1" max="5" step="0.1" value="1.5">
+                    <span class="setting-unit">x</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2><i class="fas fa-file"></i> Файлы</h2>
+        <div class="settings-card">
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-hdd"></i>
+                    <div>
+                        <h3>Максимальный размер файла</h3>
+                        <p>Максимальный размер загружаемого файла (МБ)</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <input type="number" id="maxFileSize" class="cyber-input" min="1" max="100" value="10">
+                    <span class="setting-unit">МБ</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2><i class="fas fa-shield-alt"></i> Безопасность</h2>
+        <div class="settings-card">
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-toggle-on"></i>
+                    <div>
+                        <h3>Автоматическая пауза при ошибках</h3>
+                        <p>Автоматически останавливать копирование при критических ошибках</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <label class="cyber-switch">
+                        <input type="checkbox" id="autoPause" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="setting-item">
+                <div class="setting-label">
+                    <i class="fas fa-redo"></i>
+                    <div>
+                        <h3>Автоматический ретрай</h3>
+                        <p>Автоматически повторять отправку при ошибках</p>
+                    </div>
+                </div>
+                <div class="setting-control">
+                    <label class="cyber-switch">
+                        <input type="checkbox" id="autoRetry" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-actions">
+        <button class="btn btn-primary" onclick="saveSettings()">
+            <i class="fas fa-save"></i> Сохранить настройки
+        </button>
+        <button class="btn btn-secondary" onclick="resetSettings()">
+            <i class="fas fa-undo"></i> Сбросить
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Загрузка текущих настроек
+    async function loadSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            const settings = await response.json();
+            
+            if (settings.error) {
+                console.error('Ошибка загрузки настроек:', settings.error);
+                return;
+            }
+            
+            document.getElementById('delayMessages').value = settings.delay_between_messages || 7;
+            document.getElementById('delayAccounts').value = settings.delay_between_accounts || 12;
+            document.getElementById('floodMultiplier').value = settings.flood_wait_multiplier || 1.5;
+            document.getElementById('maxFileSize').value = settings.max_file_size_mb || 10;
+            document.getElementById('autoPause').checked = settings.auto_pause !== false;
+            document.getElementById('autoRetry').checked = settings.auto_retry !== false;
+        } catch (error) {
+            console.error('Ошибка загрузки настроек:', error);
+        }
+    }
+
+    // Сохранение настроек
+    async function saveSettings() {
+        const settings = {
+            delay_between_messages: parseInt(document.getElementById('delayMessages').value),
+            delay_between_accounts: parseInt(document.getElementById('delayAccounts').value),
+            flood_wait_multiplier: parseFloat(document.getElementById('floodMultiplier').value),
+            max_file_size_mb: parseInt(document.getElementById('maxFileSize').value),
+            auto_pause: document.getElementById('autoPause').checked,
+            auto_retry: document.getElementById('autoRetry').checked
+        };
+
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(settings)
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('✅ Настройки успешно сохранены!', 'success');
+            } else {
+                showNotification('❌ Ошибка сохранения: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка сохранения: ' + error.message, 'error');
+        }
+    }
+
+    // Сброс настроек
+    function resetSettings() {
+        if (confirm('Сбросить все настройки к значениям по умолчанию?')) {
+            document.getElementById('delayMessages').value = 7;
+            document.getElementById('delayAccounts').value = 12;
+            document.getElementById('floodMultiplier').value = 1.5;
+            document.getElementById('maxFileSize').value = 10;
+            document.getElementById('autoPause').checked = true;
+            document.getElementById('autoRetry').checked = true;
+            showNotification('Настройки сброшены', 'info');
+        }
+    }
+
+    // Уведомления
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // Загружаем настройки при загрузке страницы
+    loadSettings();
+</script>
+{% endblock %}
+

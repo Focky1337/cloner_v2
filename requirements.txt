@@ -1,0 +1,11 @@
+# Telegram Bot Libraries
+aiogram>=3.13.0
+pyrogram>=2.0.106
+TgCrypto>=1.2.5  # Ускорение криптографических операций для Pyrogram
+
+# Database
+# sqlite3 встроен в Python
+
+# Utilities
+portalocker>=2.10.0
+

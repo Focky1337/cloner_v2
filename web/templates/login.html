@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if username %}Вход - {{ username }}{% else %}Вход - MegaCloner{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fas fa-robot"></i>
+                <h1>MegaCloner</h1>
+                <p>Панель управления</p>
+            </div>
+            
+            {% if username or first_name %}
+            <div class="user-info">
+                <p class="greeting">Здравствуйте, <strong>{{ first_name or username }}</strong>!</p>
+                {% if username %}
+                <p class="username">@{{ username }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if error %}
+            <div class="alert alert-error">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" class="login-form" action="{% if user_identifier %}{{ url_for('client_login', user_identifier=user_identifier) }}{% else %}{{ url_for('login') }}{% endif %}">
+                {% if is_admin %}
+                <!-- Админ логин -->
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i> Логин
+                    </label>
+                    <input type="text" id="username" name="username" required 
+                           placeholder="Введите логин" autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i> Пароль
+                    </label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="Введите пароль">
+                </div>
+                {% elif not username and not first_name %}
+                <!-- Обычный логин (если не клиент) -->
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i> Пароль
+                    </label>
+                    <input type="password" id="password" name="password" required 
+                           placeholder="Введите пароль" autofocus>
+                </div>
+                {% else %}
+                <!-- Клиент логин -->
+                <div class="form-group">
+                    <label for="code">
+                        <i class="fas fa-key"></i> Код доступа
+                    </label>
+                    <input type="text" id="code" name="code" required 
+                           placeholder="Введите код из Telegram" autofocus maxlength="6" pattern="[0-9]{6}">
+                    <small class="form-hint">Код отправлен в бот-менеджер</small>
+                </div>
+                {% endif %}
+                
+                <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fas fa-sign-in-alt"></i> Войти
+                </button>
+                
+                {% if username and not is_admin %}
+                <button type="button" class="btn btn-secondary btn-block" onclick="requestCode()" style="margin-top: 1rem;">
+                    <i class="fas fa-paper-plane"></i> Отправить код
+                </button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    
+    {% if username %}
+    <script>
+        async function requestCode() {
+            const userIdentifier = '{{ user_identifier }}';
+            try {
+                const response = await fetch('/api/auth/request-code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user_identifier: userIdentifier})
+                });
+                
+                // Проверяем, что ответ JSON, а не HTML
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('Получен не-JSON ответ:', text.substring(0, 200));
+                    alert('❌ Ошибка: Сервер вернул неверный формат ответа. Попробуйте обновить страницу.');
+                    return;
+                }
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('✅ Код отправлен в бот-менеджер! Проверьте Telegram.');
+                } else {
+                    alert('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка запроса кода:', error);
+                alert('❌ Ошибка: ' + (error.message || 'Не удалось отправить запрос'));
+            }
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
+

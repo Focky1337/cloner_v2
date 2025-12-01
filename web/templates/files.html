@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Файлы - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="files-page">
+    <div class="page-header">
+        <h1><i class="fas fa-file-alt"></i> Файлы сообщений</h1>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="showUploadModal()">
+                <i class="fas fa-upload"></i> Загрузить файл
+            </button>
+            <button class="btn btn-secondary" onclick="refreshFiles()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+        </div>
+    </div>
+
+    <div class="files-grid" id="filesGrid">
+        <div class="loading">Загрузка файлов...</div>
+    </div>
+</div>
+
+<!-- Модальное окно загрузки -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-upload"></i> Загрузить файл</h2>
+            <span class="close" onclick="closeModal('uploadModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="file-upload-area" id="fileUploadArea" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <p>Перетащите файл сюда или</p>
+                <label for="fileInput" class="btn btn-primary">
+                    <i class="fas fa-folder-open"></i> Выбрать файл
+                </label>
+                <input type="file" id="fileInput" accept=".txt,.text" style="display: none;" onchange="handleFileSelect(event)">
+                <p class="file-name" id="selectedFileName"></p>
+            </div>
+            <div class="form-group" style="margin-top: 2rem;">
+                <label>Или введите содержимое вручную</label>
+                <textarea id="fileContent" class="cyber-input" rows="10" placeholder="Привет&#10;Как дела?&#10;Пока"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="uploadFile()">
+                <i class="fas fa-save"></i> Загрузить
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal('uploadModal')">
+                Отмена
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно просмотра -->
+<div id="viewModal" class="modal">
+    <div class="modal-content modal-large">
+        <div class="modal-header">
+            <h2><i class="fas fa-eye"></i> Просмотр файла</h2>
+            <span class="close" onclick="closeModal('viewModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="viewFileName" class="cyber-input" readonly>
+            </div>
+            <div class="form-group">
+                <label>Содержимое</label>
+                <textarea id="viewFileContent" class="cyber-input" rows="15" readonly></textarea>
+            </div>
+            <div class="form-group">
+                <label>Количество сообщений</label>
+                <input type="text" id="viewMessagesCount" class="cyber-input" readonly>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="editCurrentFile()">
+                <i class="fas fa-edit"></i> Редактировать
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal('viewModal')">
+                Закрыть
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentViewFile = null;
+
+    async function loadFiles() {
+        const grid = document.getElementById('filesGrid');
+        grid.innerHTML = '<div class="loading">Загрузка...</div>';
+        
+        try {
+            const response = await fetch('/api/files');
+            const files = await response.json();
+            
+            if (files.error) {
+                grid.innerHTML = `<div class="error">${files.error}</div>`;
+                return;
+            }
+            
+            if (files.length === 0) {
+                grid.innerHTML = '<div class="empty">Нет загруженных файлов</div>';
+                return;
+            }
+            
+            grid.innerHTML = files.map(file => `
+                <div class="file-card">
+                    <div class="file-icon">
+                        <i class="fas fa-file-alt"></i>
+                    </div>
+                    <div class="file-content">
+                        <h3>${file.name}</h3>
+                        <p>${file.messages_count} сообщений</p>
+                    </div>
+                    <div class="file-actions">
+                        <button class="btn btn-sm btn-primary" onclick="viewFile('${file.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteFile('${file.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            grid.innerHTML = `<div class="error">Ошибка: ${error.message}</div>`;
+        }
+    }
+
+    function refreshFiles() {
+        loadFiles();
+    }
+
+    let selectedFile = null;
+
+    function showUploadModal() {
+        document.getElementById('fileContent').value = '';
+        document.getElementById('selectedFileName').textContent = '';
+        document.getElementById('fileInput').value = '';
+        selectedFile = null;
+        document.getElementById('fileUploadArea').classList.remove('dragover');
+        document.getElementById('uploadModal').style.display = 'block';
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('fileUploadArea').classList.add('dragover');
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('fileUploadArea').classList.remove('dragover');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('fileUploadArea').classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            processFile(files[0]);
+        }
+    }
+
+    function handleFileSelect(e) {
+        const files = e.target.files;
+        if (files.length > 0) {
+            processFile(files[0]);
+        }
+    }
+
+    function processFile(file) {
+        if (!file.name.endsWith('.txt') && !file.name.endsWith('.text')) {
+            showNotification('❌ Поддерживаются только .txt файлы', 'error');
+            return;
+        }
+
+        selectedFile = file;
+        document.getElementById('selectedFileName').textContent = file.name;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('fileContent').value = e.target.result;
+        };
+        reader.readAsText(file);
+    }
+
+    async function uploadFile() {
+        const content = document.getElementById('fileContent').value.trim();
+        let name = '';
+        
+        if (selectedFile) {
+            name = selectedFile.name;
+        } else {
+            // Генерируем имя из текущей даты
+            name = 'messages_' + new Date().getTime() + '.txt';
+        }
+        
+        if (!content) {
+            showNotification('❌ Файл пустой или не выбран', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/files/upload', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name, content})
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Файл загружен!', 'success');
+                closeModal('uploadModal');
+                loadFiles();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async function viewFile(id) {
+        try {
+            const response = await fetch(`/api/files/${id}`);
+            const file = await response.json();
+            
+            if (file.error) {
+                showNotification('❌ Ошибка: ' + file.error, 'error');
+                return;
+            }
+            
+            currentViewFile = id;
+            document.getElementById('viewFileName').value = file.name;
+            document.getElementById('viewFileContent').value = file.content;
+            document.getElementById('viewMessagesCount').value = file.messages_count;
+            document.getElementById('viewModal').style.display = 'block';
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    function editCurrentFile() {
+        if (!currentViewFile) return;
+        const name = document.getElementById('viewFileName').value;
+        const content = document.getElementById('viewFileContent').value;
+        
+        // Здесь можно открыть модальное окно редактирования
+        alert('Редактирование файла (будет реализовано)');
+    }
+
+    async function deleteFile(id) {
+        if (!confirm('Удалить файл?')) return;
+        
+        try {
+            const response = await fetch(`/api/files/delete/${id}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Файл удален!', 'success');
+                loadFiles();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    loadFiles();
+</script>
+{% endblock %}

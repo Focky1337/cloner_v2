@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Прокси - MegaCloner{% endblock %}
+
+{% block content %}
+<div class="proxies-page">
+    <div class="page-header">
+        <h1><i class="fas fa-network-wired"></i> Управление прокси</h1>
+        <div class="page-actions">
+            <button class="btn btn-primary" onclick="showAddProxyModal()">
+                <i class="fas fa-plus"></i> Добавить прокси
+            </button>
+            <button class="btn btn-secondary" onclick="refreshProxies()">
+                <i class="fas fa-sync-alt"></i> Обновить
+            </button>
+        </div>
+    </div>
+
+    <div class="proxies-table-container">
+        <table class="accounts-table" id="proxiesTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Хост</th>
+                    <th>Порт</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="proxiesTableBody">
+                <tr>
+                    <td colspan="6" class="loading">Загрузка...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Модальное окно добавления -->
+<div id="addProxyModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-plus"></i> Добавить прокси</h2>
+            <span class="close" onclick="closeModal('addProxyModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Хост</label>
+                <input type="text" id="proxyHost" class="cyber-input" placeholder="proxy.example.com">
+            </div>
+            <div class="form-group">
+                <label>Порт</label>
+                <input type="number" id="proxyPort" class="cyber-input" placeholder="8080" min="1" max="65535">
+            </div>
+            <div class="form-group">
+                <label>Тип</label>
+                <select id="proxyScheme" class="cyber-input">
+                    <option value="socks5">SOCKS5</option>
+                    <option value="socks4">SOCKS4</option>
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Логин (опционально)</label>
+                <input type="text" id="proxyUsername" class="cyber-input" placeholder="username">
+            </div>
+            <div class="form-group">
+                <label>Пароль (опционально)</label>
+                <input type="password" id="proxyPassword" class="cyber-input" placeholder="password">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="testProxy()">
+                <i class="fas fa-vial"></i> Тестировать
+            </button>
+            <button class="btn btn-primary" onclick="addProxy()">
+                <i class="fas fa-save"></i> Сохранить
+            </button>
+            <button class="btn btn-secondary" onclick="closeModal('addProxyModal')">
+                Отмена
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadProxies() {
+        const tbody = document.getElementById('proxiesTableBody');
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">Загрузка...</td></tr>';
+        
+        try {
+            const response = await fetch('/api/proxies');
+            const proxies = await response.json();
+            
+            if (proxies.error) {
+                tbody.innerHTML = `<tr><td colspan="6" class="error">${proxies.error}</td></tr>`;
+                return;
+            }
+            
+            if (proxies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty">Нет прокси</tr>';
+                return;
+            }
+            
+            tbody.innerHTML = proxies.map(proxy => `
+                <tr>
+                    <td><strong>#${proxy.id}</strong></td>
+                    <td>${proxy.host}</td>
+                    <td>${proxy.port}</td>
+                    <td><span class="badge badge-success">${proxy.scheme.toUpperCase()}</span></td>
+                    <td>
+                        <span class="badge badge-success" id="status-${proxy.id}">
+                            <i class="fas fa-check-circle"></i> Активен
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="testProxyById(${proxy.id})">
+                            <i class="fas fa-vial"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProxy(${proxy.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            tbody.innerHTML = `<tr><td colspan="6" class="error">Ошибка: ${error.message}</td></tr>`;
+        }
+    }
+
+    function refreshProxies() {
+        loadProxies();
+    }
+
+    function showAddProxyModal() {
+        document.getElementById('proxyHost').value = '';
+        document.getElementById('proxyPort').value = '';
+        document.getElementById('proxyScheme').value = 'socks5';
+        document.getElementById('proxyUsername').value = '';
+        document.getElementById('proxyPassword').value = '';
+        document.getElementById('addProxyModal').style.display = 'block';
+    }
+
+    async function addProxy() {
+        const host = document.getElementById('proxyHost').value.trim();
+        const port = parseInt(document.getElementById('proxyPort').value);
+        const scheme = document.getElementById('proxyScheme').value;
+        const username = document.getElementById('proxyUsername').value.trim();
+        const password = document.getElementById('proxyPassword').value.trim();
+        
+        if (!host || !port) {
+            showNotification('❌ Заполните хост и порт', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/proxies/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({host, port, scheme, username, password})
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Прокси добавлен!', 'success');
+                closeModal('addProxyModal');
+                loadProxies();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async function testProxy() {
+        const host = document.getElementById('proxyHost').value.trim();
+        const port = parseInt(document.getElementById('proxyPort').value);
+        const scheme = document.getElementById('proxyScheme').value;
+        
+        if (!host || !port) {
+            showNotification('❌ Заполните хост и порт', 'error');
+            return;
+        }
+
+        showNotification('⏳ Тестирование прокси...', 'info');
+        
+        try {
+            const response = await fetch('/api/proxies/test', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({host, port, scheme})
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Прокси работает!', 'success');
+            } else {
+                showNotification('❌ Прокси не работает: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async function testProxyById(id) {
+        showNotification('⏳ Тестирование прокси...', 'info');
+        
+        try {
+            const response = await fetch(`/api/proxies/test/${id}`, {
+                method: 'POST'
+            });
+
+            const result = await response.json();
+            const statusBadge = document.getElementById(`status-${id}`);
+            if (result.success) {
+                showNotification('✅ Прокси работает!', 'success');
+                statusBadge.className = 'badge badge-success';
+                statusBadge.innerHTML = '<i class="fas fa-check-circle"></i> Активен';
+            } else {
+                showNotification('❌ Прокси не работает', 'error');
+                statusBadge.className = 'badge badge-error';
+                statusBadge.innerHTML = '<i class="fas fa-times-circle"></i> Неактивен';
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async function deleteProxy(id) {
+        if (!confirm('Удалить прокси?')) return;
+        
+        try {
+            const response = await fetch(`/api/proxies/delete/${id}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            if (result.success) {
+                showNotification('✅ Прокси удален!', 'success');
+                loadProxies();
+            } else {
+                showNotification('❌ Ошибка: ' + (result.error || 'Неизвестная ошибка'), 'error');
+            }
+        } catch (error) {
+            showNotification('❌ Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+    }
+
+    loadProxies();
+</script>
+{% endblock %}
