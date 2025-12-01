@@ -1,4 +1,4 @@
-# Telegram Cloner Bot
+# Telegram Cloner Bot by Salfetka @calfetkin
 
 Telegram бот для клонирования сообщений между чатами с поддержкой множественных аккаунтов, веб-панели управления и системы зеркал.
 
@@ -28,7 +28,7 @@ Telegram бот для клонирования сообщений между ч
 
 1. Клонируйте репозиторий:
 ```bash
-git clone <repository-url>
+git clone https://github.com/Focky1337/cloner_v2
 cd salfetka2.0
 ```
 
@@ -56,9 +56,9 @@ cd ..
 Отредактируйте `config.py`:
 ```python
 API_ID = 12345678
-API_HASH = "your_api_hash"
-BOT_TOKEN = "your_bot_token"
-ADMIN_IDS = [your_telegram_id]
+API_HASH = "апи хэш"
+BOT_TOKEN = "токен бота"
+ADMIN_IDS = [айди юзера/клиента]
 ```
 
 Отредактируйте `mng/manager_config.py`:
@@ -66,7 +66,7 @@ ADMIN_IDS = [your_telegram_id]
 MANAGER_BOT_TOKEN = "your_manager_bot_token"
 ADMIN_ID = your_telegram_id
 CRYPTOBOT_TOKEN = "your_cryptobot_token"
-PAYMENT_AMOUNT = 0.0
+PAYMENT_AMOUNT = 0.0 - цена
 ```
 
 ## Запуск
@@ -88,7 +88,7 @@ python app.py
 
 **Логин для админа:**
 - Username: `admin`
-- Password: `ad2236`
+- Password: `поставьте свой изменив в файле базы данных`
 
 ### Менеджер зеркал
 
@@ -169,4 +169,5 @@ salfetka2.0/
 1. Правильность токенов и API ключей
 2. Установлены ли все зависимости
 3. Логи в `DataBase/bot_logs.txt`
+
 
